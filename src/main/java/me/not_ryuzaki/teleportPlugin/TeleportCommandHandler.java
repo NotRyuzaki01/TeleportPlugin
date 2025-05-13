@@ -1,5 +1,6 @@
 package me.not_ryuzaki.teleportPlugin;
 
+import net.md_5.bungee.api.ChatColor;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.*;
@@ -28,13 +29,10 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void sendActionBar(Player player, String message) {
-        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(message));
-    }
-
     private void startTeleportCountdown(Player teleporting, Player target) {
         final int[] seconds = {5};
         final Location startLoc = teleporting.getLocation().clone();
+        final Location destination = target.getLocation().clone();
 
         // Cancel any existing countdown
         BukkitRunnable old = activeCountdowns.remove(teleporting.getUniqueId());
@@ -55,18 +53,22 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                         currentLoc.getZ() != startLoc.getZ()) {
 
                     teleporting.sendMessage("§cTeleport cancelled because you moved!");
+                    teleporting.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport cancelled because you moved!"));
                     teleporting.playSound(currentLoc, Sound.ENTITY_VILLAGER_NO, 1f, 1f);
-                    target.sendMessage("§eTeleport cancelled because " + teleporting.getName() + " moved.");
+                    target.sendMessage("§cTeleport cancelled because " + teleporting.getName() + " moved!");
+                    target.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport cancelled because " + teleporting.getName() + " moved!"));
                     target.playSound(target.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                     activeCountdowns.remove(teleporting.getUniqueId());
                     cancel();
                     return;
                 }
 
-                if (seconds[0] <= 0) {
-                    teleporting.teleport(target.getLocation());
+                if (seconds[0] == 0) {
+                    teleporting.teleport(destination);
                     teleporting.sendMessage("§aTeleported!");
+                    teleporting.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§aTeleported!"));
                     target.sendMessage("§aTeleport completed.");
+                    target.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§aTeleport completed."));
                     teleporting.playSound(teleporting.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
                     target.playSound(target.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
                     activeCountdowns.remove(teleporting.getUniqueId());
@@ -74,11 +76,25 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                     return;
                 }
 
-                String msg = "§eTeleporting in " + seconds[0] + "...";
-                sendActionBar(teleporting, msg);
-                sendActionBar(target, msg);
+                // Countdown message only shown if seconds > 0
+                TextComponent message = new TextComponent("Teleporting in ");
+                message.setColor(ChatColor.WHITE);
+
+                TextComponent countdownNumber = new TextComponent(String.valueOf(seconds[0]));
+                countdownNumber.setColor(ChatColor.of("#0094FF"));
+
+                TextComponent suffix = new TextComponent("s");
+                suffix.setColor(ChatColor.of("#0094FF"));
+
+                message.addExtra(countdownNumber);
+                message.addExtra(suffix);
+
+                teleporting.spigot().sendMessage(ChatMessageType.ACTION_BAR, message);
+                target.spigot().sendMessage(ChatMessageType.ACTION_BAR, message);
+
                 teleporting.playSound(teleporting.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
                 target.playSound(target.getLocation(), Sound.UI_BUTTON_CLICK, 1f, 1f);
+
                 seconds[0]--;
             }
         };
@@ -106,18 +122,32 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                 Player target = Bukkit.getPlayerExact(args[0]);
                 if (target == null || target == player) {
                     player.sendMessage("§cInvalid target.");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cInvalid target."));
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                     return true;
                 }
 
                 if (activeCountdowns.containsKey(player.getUniqueId())) {
                     player.sendMessage("§cYou already have a teleport in progress.");
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                     return true;
                 }
 
                 requests.put(target.getUniqueId(), new TeleportRequest(player.getUniqueId(), name.equals("tpahere")));
-                player.sendMessage("§aRequest sent to " + target.getName());
-                String type = name.equals("tpahere") ? "wants to teleport you to them" : "wants to teleport to you";
+                player.sendMessage("§aRequest sent to §x§0§0§9§4§F§F" + target.getName());
+                TextComponent prefix = new TextComponent("Request sent to ");
+                prefix.setColor(net.md_5.bungee.api.ChatColor.GREEN);
+
+                TextComponent playername = new TextComponent(target.getName());
+                playername.setColor(net.md_5.bungee.api.ChatColor.of("#0094FF"));
+
+                prefix.addExtra(playername);
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, prefix);
+
+                player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
+                String type = name.equals("tpahere") ? "sent a §x§0§0§9§4§F§Ftpahere§r request" : "sent a §x§0§0§9§4§F§Ftpa§r request";
                 target.sendMessage("§e" + player.getName() + " " + type + ". Use §a/tpaccept§e or §c/tpdeny§e.");
+                target.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§e" + player.getName() + " " + type + ". Use §a/tpaccept§e or §c/tpdeny§e."));
                 target.playSound(target.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
                 return true;
             }
@@ -126,17 +156,27 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                 TeleportRequest req = requests.remove(player.getUniqueId());
                 if (req == null) {
                     player.sendMessage("§cNo pending teleport requests.");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cNo pending teleport requests."));
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                     return true;
                 }
 
                 Player requester = Bukkit.getPlayer(req.requester);
                 if (requester == null) {
                     player.sendMessage("§cThe requester is no longer online.");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cThe requester is no longer online."));
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                     return true;
                 }
 
                 player.sendMessage("§aTeleport request accepted.");
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§aTeleport request accepted."));
+                player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
+
                 requester.sendMessage("§aYour teleport request was accepted.");
+                requester.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§aYour teleport request was accepted."));
+                requester.playSound(requester.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
+
                 if (req.here) {
                     startTeleportCountdown(player, requester); // bring requester to player
                 } else {
@@ -146,10 +186,22 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
             }
 
             case "tpdeny": {
-                if (requests.remove(player.getUniqueId()) != null) {
+                TeleportRequest req = requests.remove(player.getUniqueId());
+                if (req != null) {
                     player.sendMessage("§cTeleport request denied.");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport request denied."));
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+
+                    Player requester = Bukkit.getPlayer(req.requester);
+                    if (requester != null) {
+                        requester.sendMessage("§cYour teleport request was denied.");
+                        requester.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cYour teleport request was denied."));
+                        requester.playSound(requester.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                    }
                 } else {
                     player.sendMessage("§cNo pending teleport requests.");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cNo pending teleport requests."));
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                 }
                 return true;
             }
@@ -159,12 +211,15 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                 boolean found = requests.entrySet().removeIf(entry -> entry.getValue().requester.equals(requester));
                 if (found) {
                     player.sendMessage("§eTeleport request cancelled.");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§eTeleport request cancelled."));
+                    player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
                 } else {
                     player.sendMessage("§cNo active request to cancel.");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cNo active request to cancel."));
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
                 }
                 return true;
             }
-
             default:
                 return false;
         }
