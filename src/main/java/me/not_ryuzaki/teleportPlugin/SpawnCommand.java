@@ -31,7 +31,6 @@ public class SpawnCommand implements CommandExecutor {
             return true;
         }
 
-        // ⛔ Block if in combat
         if (Combat.isInCombat(player)) {
             player.sendMessage("§cYou can't use /spawn while in combat!");
             player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cYou're in combat!"));
@@ -50,7 +49,6 @@ public class SpawnCommand implements CommandExecutor {
         return true;
     }
 
-
     private void startTeleportCountdown(Player teleporting, Location destination) {
         final int[] seconds = {5};
         final Location startLoc = teleporting.getLocation().clone();
@@ -62,6 +60,17 @@ public class SpawnCommand implements CommandExecutor {
             @Override
             public void run() {
                 if (!teleporting.isOnline()) {
+                    Combat.unregisterTeleportCallback(teleporting.getUniqueId());
+                    activeCountdowns.remove(teleporting.getUniqueId());
+                    cancel();
+                    return;
+                }
+
+                if (Combat.isInCombat(teleporting)) {
+                    teleporting.sendMessage("§cTeleport cancelled — you entered combat!");
+                    teleporting.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport cancelled — in combat!"));
+                    teleporting.playSound(teleporting.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                    Combat.unregisterTeleportCallback(teleporting.getUniqueId());
                     activeCountdowns.remove(teleporting.getUniqueId());
                     cancel();
                     return;
@@ -72,6 +81,7 @@ public class SpawnCommand implements CommandExecutor {
                     teleporting.sendMessage("§cTeleport cancelled because you moved!");
                     teleporting.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport cancelled because you moved!"));
                     teleporting.playSound(currentLoc, Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                    Combat.unregisterTeleportCallback(teleporting.getUniqueId());
                     activeCountdowns.remove(teleporting.getUniqueId());
                     cancel();
                     return;
@@ -82,6 +92,7 @@ public class SpawnCommand implements CommandExecutor {
                     teleporting.sendMessage("§aTeleported to spawn!");
                     teleporting.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§aTeleported to spawn!"));
                     teleporting.playSound(teleporting.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1f, 1f);
+                    Combat.unregisterTeleportCallback(teleporting.getUniqueId());
                     activeCountdowns.remove(teleporting.getUniqueId());
                     cancel();
                     return;
@@ -106,5 +117,14 @@ public class SpawnCommand implements CommandExecutor {
 
         countdown.runTaskTimer(plugin, 0L, 20L);
         activeCountdowns.put(teleporting.getUniqueId(), countdown);
+
+        // Register cancel callback on combat entry
+        Combat.registerTeleportCancelCallback(teleporting.getUniqueId(), () -> {
+            countdown.cancel();
+            teleporting.sendMessage("§cTeleport cancelled — you entered combat!");
+            teleporting.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport cancelled — in combat!"));
+            teleporting.playSound(teleporting.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+            activeCountdowns.remove(teleporting.getUniqueId());
+        });
     }
 }
