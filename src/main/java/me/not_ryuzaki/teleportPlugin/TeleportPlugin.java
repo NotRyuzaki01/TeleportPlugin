@@ -14,5 +14,9 @@ public final class TeleportPlugin extends JavaPlugin {
         getCommand("tpaccept").setExecutor(handler);
         getCommand("tpdeny").setExecutor(handler);
         getCommand("tpcancel").setExecutor(handler);
+
+        getCommand("spawn").setExecutor(new SpawnCommand(this, handler.getActiveCountdowns()));
+        getServer().getPluginManager().registerEvents(new JoinListener(), this);
+        getServer().getPluginManager().registerEvents(new RespawnListener(), this);
     }
 }

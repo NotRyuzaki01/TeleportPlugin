@@ -34,7 +34,6 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
         final Location startLoc = teleporting.getLocation().clone();
         final Location destination = target.getLocation().clone();
 
-        // Cancel any existing countdown
         BukkitRunnable old = activeCountdowns.remove(teleporting.getUniqueId());
         if (old != null) old.cancel();
 
@@ -55,9 +54,11 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                     teleporting.sendMessage("§cTeleport cancelled because you moved!");
                     teleporting.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport cancelled because you moved!"));
                     teleporting.playSound(currentLoc, Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+
                     target.sendMessage("§cTeleport cancelled because " + teleporting.getName() + " moved!");
                     target.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport cancelled because " + teleporting.getName() + " moved!"));
                     target.playSound(target.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+
                     activeCountdowns.remove(teleporting.getUniqueId());
                     cancel();
                     return;
@@ -76,13 +77,10 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                     return;
                 }
 
-                // Countdown message only shown if seconds > 0
                 TextComponent message = new TextComponent("Teleporting in ");
                 message.setColor(ChatColor.WHITE);
-
                 TextComponent countdownNumber = new TextComponent(String.valueOf(seconds[0]));
                 countdownNumber.setColor(ChatColor.of("#0094FF"));
-
                 TextComponent suffix = new TextComponent("s");
                 suffix.setColor(ChatColor.of("#0094FF"));
 
@@ -127,6 +125,14 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                     return true;
                 }
 
+                // ⛔ Block if sender or target is in combat
+                if (me.not_ryuzaki.mainScorePlugin.Combat.isInCombat(player) || me.not_ryuzaki.mainScorePlugin.Combat.isInCombat(target)) {
+                    player.sendMessage("§cYou or the target is in combat!");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cCan't request teleport while in combat!"));
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                    return true;
+                }
+
                 if (activeCountdowns.containsKey(player.getUniqueId())) {
                     player.sendMessage("§cYou already have a teleport in progress.");
                     player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
@@ -134,20 +140,45 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                 }
 
                 requests.put(target.getUniqueId(), new TeleportRequest(player.getUniqueId(), name.equals("tpahere")));
-                player.sendMessage("§aRequest sent to §x§0§0§9§4§F§F" + target.getName());
-                TextComponent prefix = new TextComponent("Request sent to ");
-                prefix.setColor(net.md_5.bungee.api.ChatColor.GREEN);
 
-                TextComponent playername = new TextComponent(target.getName());
-                playername.setColor(net.md_5.bungee.api.ChatColor.of("#0094FF"));
+                // Notify sender
+                TextComponent sentMsg = new TextComponent("Request sent to ");
+                sentMsg.setColor(ChatColor.GREEN);
+                TextComponent nameBlue = new TextComponent(target.getName());
+                nameBlue.setColor(ChatColor.of("#0094FF"));
+                sentMsg.addExtra(nameBlue);
 
-                prefix.addExtra(playername);
-                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, prefix);
-
+                player.spigot().sendMessage(ChatMessageType.CHAT, sentMsg);
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, sentMsg);
                 player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
-                String type = name.equals("tpahere") ? "sent a §x§0§0§9§4§F§Ftpahere§r request" : "sent a §x§0§0§9§4§F§Ftpa§r request";
-                target.sendMessage("§e" + player.getName() + " " + type + ". Use §a/tpaccept§e or §c/tpdeny§e.");
-                target.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§e" + player.getName() + " " + type + ". Use §a/tpaccept§e or §c/tpdeny§e."));
+
+                // Notify target
+                TextComponent full = new TextComponent();
+                TextComponent senderName = new TextComponent(player.getName());
+                senderName.setColor(ChatColor.of("#0094FF"));
+                TextComponent typeText = new TextComponent(" sent a ");
+                typeText.setColor(ChatColor.WHITE);
+                TextComponent typeCmd = new TextComponent(name);
+                typeCmd.setColor(ChatColor.of("#0094FF"));
+                TextComponent suffix = new TextComponent(" request. Use ");
+                suffix.setColor(ChatColor.WHITE);
+                TextComponent accept = new TextComponent("/tpaccept");
+                accept.setColor(ChatColor.GREEN);
+                TextComponent or = new TextComponent(" or ");
+                or.setColor(ChatColor.WHITE);
+                TextComponent deny = new TextComponent("/tpdeny");
+                deny.setColor(ChatColor.RED);
+
+                full.addExtra(senderName);
+                full.addExtra(typeText);
+                full.addExtra(typeCmd);
+                full.addExtra(suffix);
+                full.addExtra(accept);
+                full.addExtra(or);
+                full.addExtra(deny);
+
+                target.spigot().sendMessage(ChatMessageType.CHAT, full);
+                target.spigot().sendMessage(ChatMessageType.ACTION_BAR, full);
                 target.playSound(target.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
                 return true;
             }
@@ -169,18 +200,26 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                     return true;
                 }
 
-                player.sendMessage("§aTeleport request accepted.");
-                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§aTeleport request accepted."));
-                player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
+                // ⛔ Block if either is in combat
+                if (me.not_ryuzaki.mainScorePlugin.Combat.isInCombat(player) || me.not_ryuzaki.mainScorePlugin.Combat.isInCombat(requester)) {
+                    player.sendMessage("§cTeleport cancelled — one of you is in combat!");
+                    player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cYou're in combat!"));
+                    player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                    requester.sendMessage("§cTeleport cancelled — you or the target is in combat.");
+                    requester.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§cTeleport cancelled — in combat!"));
+                    requester.playSound(requester.getLocation(), Sound.ENTITY_VILLAGER_NO, 1f, 1f);
+                    return true;
+                }
 
+                player.sendMessage("§aTeleport request accepted.");
+                player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
                 requester.sendMessage("§aYour teleport request was accepted.");
-                requester.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("§aYour teleport request was accepted."));
                 requester.playSound(requester.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1f);
 
                 if (req.here) {
-                    startTeleportCountdown(player, requester); // bring requester to player
+                    startTeleportCountdown(player, requester);
                 } else {
-                    startTeleportCountdown(requester, player); // requester goes to player
+                    startTeleportCountdown(requester, player);
                 }
                 return true;
             }
@@ -220,9 +259,15 @@ public class TeleportCommandHandler implements CommandExecutor, TabCompleter {
                 }
                 return true;
             }
+
             default:
                 return false;
         }
+    }
+
+
+    public Map<UUID, BukkitRunnable> getActiveCountdowns() {
+        return activeCountdowns;
     }
 
     @Override

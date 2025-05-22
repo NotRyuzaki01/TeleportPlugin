@@ -8,3 +8,5 @@ commands:
   tpaccept:
   tpdeny:
   tpcancel:
+  spawn:
+    description: Teleports you to the world spawn
